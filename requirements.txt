@@ -1,0 +1,21 @@
+# --- PyTorch with CUDA Support ---
+# Adjust the cu121 (CUDA 12.1) or cu118 (CUDA 11.8) based on your system's CUDA version
+--find-links https://download.pytorch.org/whl/cu130
+torch
+torchvision
+torchaudio
+
+# --- Computer Vision & AI ---
+ultralytics
+opencv-python
+pillow
+
+# --- Data Science & Visualization ---
+numpy
+pandas
+matplotlib
+
+# --- Chess Processing & Vector Graphics ---
+chess
+svglib
+reportlab

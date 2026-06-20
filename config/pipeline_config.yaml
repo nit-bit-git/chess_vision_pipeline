@@ -1,0 +1,4 @@
+default:
+  camera: 0
+  input_size: [640, 480]
+  model_path: models/yolov5_chess.pt
