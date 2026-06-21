@@ -1,9 +1,8 @@
 import os
 import cv2
 import torch
-from ultralytics import YOLO
 
-from .preprocessing import testfn
+from .preprocessing import preprocess_image
 
 
 def main():
@@ -15,7 +14,17 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Using device: {device}")
     
-    testfn()
+    image_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'images', 'cb3.jpg'))
+    if not os.path.exists(image_path):
+        print(f"Error: Sample image not found at {image_path}")
+        return
+    print(f"Loading image from: {image_path}")
+    image = cv2.imread(image_path)
+    if image is None:
+        print(f"Error: Failed to load image from {image_path}")
+        return
+    print(f"Image loaded successfully with shape: {image.shape}")
+    preprocess_image(image)
 
 if __name__ == "__main__":
     main()
