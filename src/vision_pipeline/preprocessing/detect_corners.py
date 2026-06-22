@@ -10,8 +10,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from typing import Optional
 
-from .transforms import _strategy1_contour, strategy2_grayscale_hough_grid, _visualize_corners, extrapolate_to_n_lines
-from .utils.utils import _order_points, _merge_lines, filter_lines_by_spacing
+from .transforms import _strategy1_contour, strategy2_grayscale_hough_grid, _visualize_corners
+from .utils.utils import _order_points
 
 
 def find_board_corners(img: np.ndarray, debug: bool = False) -> np.ndarray:

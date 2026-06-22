@@ -192,29 +192,81 @@ def get_intersection(line1, line2):
         # Lines are parallel
         return None
 
+# def detect_board_orientation(
+#     intersections: list,
+#     warped_img: np.ndarray,
+# ):
+#     """
+#     Identify which grid corner is a1 by sampling square brightness.
+ 
+#     # On a correctly colored chessboard, exactly two opposite corners are dark
+#     # and two are light. We estimate the corner square brightness, identify the
+#     # two darkest corners, and use their positions to infer board orientation.
+ 
+#     Returns
+#     -------
+#     a1_row, a1_col  : grid indices of the a1 square's top-left intersection
+#     flip_rows       : True → rank increases as row index decreases
+#     flip_cols       : True → file increases as col index decreases
+#     brightness      : 8×8 float array of median square brightness (for debug)
+#     """
+#     H, W = warped_img.shape[:2]
+#     gray = cv2.cvtColor(warped_img, cv2.COLOR_BGR2GRAY) \
+#            if warped_img.ndim == 3 else warped_img
+ 
+#     # Sample median brightness of each square via a filled polygon mask
+#     brightness = np.zeros((8, 8), dtype=float)
+#     ek = np.ones((5, 5), np.uint8)
+#     for r in range(8):
+#         for c in range(8):
+#             poly = np.array(
+#                 [intersections[r][c], intersections[r][c+1],
+#                  intersections[r+1][c+1], intersections[r+1][c]],
+#                 dtype=np.int32,
+#             )
+#             mask = np.zeros((H, W), dtype=np.uint8)
+#             cv2.fillPoly(mask, [poly], 255)
+#             mask = cv2.erode(mask, ek, iterations=1)   # avoid edge lines
+#             vals = gray[mask > 0]
+#             brightness[r, c] = float(np.median(vals)) if len(vals) else 128.0
+ 
+#     # Find the two darkest corner squares
+#     corner_map = {'TL': (0,0), 'TR': (0,7), 'BL': (7,0), 'BR': (7,7)}
+#     corner_b   = {name: brightness[r, c] for name, (r, c) in corner_map.items()}
+#     sorted_c   = sorted(corner_b.items(), key=lambda x: x[1])
+#     dark1, dark2 = sorted_c[0][0], sorted_c[1][0]
+ 
+#     # The two dark corners must be diagonal — if not, fall back to darkest single
+#     if {dark1, dark2} in ({'TL','BR'}, {'TR','BL'}):
+#         a1_candidate = dark1          # darker of the two diagonal dark corners
+#     else:
+#         a1_candidate = sorted_c[0][0]  ## need better conditioning for determining a1 as poor lighting may break
+ 
+#     # Orientation lookup: corner name → (a1_row, a1_col, flip_rows, flip_cols)
+#     orientation_map = {
+#         'BL': (7, 0, False, False),   # normal white-side view
+#         'BR': (7, 7, False, True),    # left-right mirror
+#         'TL': (0, 0, True,  False),   # black-side view
+#         'TR': (0, 7, True,  True),    # rotated 180°
+#     }
+#     a1_row, a1_col, flip_rows, flip_cols = orientation_map[a1_candidate]
+#     return a1_row, a1_col, flip_rows, flip_cols, brightness
+    
 def detect_board_orientation(
     intersections: list,
     warped_img: np.ndarray,
 ):
     """
-    Identify which grid corner is a1 by sampling square brightness.
- 
-    # On a correctly colored chessboard, exactly two opposite corners are dark
-    # and two are light. We estimate the corner square brightness, identify the
-    # two darkest corners, and use their positions to infer board orientation.
- 
-    Returns
-    -------
-    a1_row, a1_col  : grid indices of the a1 square's top-left intersection
-    flip_rows       : True → rank increases as row index decreases
-    flip_cols       : True → file increases as col index decreases
-    brightness      : 8×8 float array of median square brightness (for debug)
+    Identify which grid corner is a1 by analyzing aggregate structural brightness.
+    
+    Rule 1: a1 is ALWAYS a Dark square.
+    Rule 2: a1 is ALWAYS on the White Player's side (Rank 1).
     """
     H, W = warped_img.shape[:2]
     gray = cv2.cvtColor(warped_img, cv2.COLOR_BGR2GRAY) \
            if warped_img.ndim == 3 else warped_img
- 
-    # Sample median brightness of each square via a filled polygon mask
+
+    # 1. Sample median brightness of each square
     brightness = np.zeros((8, 8), dtype=float)
     ek = np.ones((5, 5), np.uint8)
     for r in range(8):
@@ -229,29 +281,57 @@ def detect_board_orientation(
             mask = cv2.erode(mask, ek, iterations=1)   # avoid edge lines
             vals = gray[mask > 0]
             brightness[r, c] = float(np.median(vals)) if len(vals) else 128.0
- 
-    # Find the two darkest corner squares
-    corner_map = {'TL': (0,0), 'TR': (0,7), 'BL': (7,0), 'BR': (7,7)}
-    corner_b   = {name: brightness[r, c] for name, (r, c) in corner_map.items()}
-    sorted_c   = sorted(corner_b.items(), key=lambda x: x[1])
-    dark1, dark2 = sorted_c[0][0], sorted_c[1][0]
- 
-    # The two dark corners must be diagonal — if not, fall back to darkest single
-    if {dark1, dark2} in ({'TL','BR'}, {'TR','BL'}):
-        a1_candidate = dark1          # darker of the two diagonal dark corners
+
+    # =========================================================================
+    # STEP 1: Determine the Dark Pattern (Ignores pieces by using 32 squares)
+    # =========================================================================
+    # Pattern 0: TL, BR, etc. (r+c is even)
+    # Pattern 1: TR, BL, etc. (r+c is odd)
+    pattern_0_vals = [brightness[r, c] for r in range(8) for c in range(8) if (r + c) % 2 == 0]
+    pattern_1_vals = [brightness[r, c] for r in range(8) for c in range(8) if (r + c) % 2 != 0]
+    
+    # Whichever pattern has the lower median is physically the dark squares
+    is_pattern_0_dark = np.median(pattern_0_vals) < np.median(pattern_1_vals)
+
+    # =========================================================================
+    # STEP 2: Determine White's Location (Top vs Bottom)
+    # =========================================================================
+    # White pieces are brighter than Black pieces. Compare mean brightness of ranks.
+    top_brightness = np.mean(brightness[0:2, :])
+    bottom_brightness = np.mean(brightness[6:8, :])
+    
+    white_is_bottom = bottom_brightness > top_brightness
+
+    # =========================================================================
+    # STEP 3: Assign A1 (The Dark corner on White's side)
+    # =========================================================================
+    if white_is_bottom:
+        # Check the two bottom corners: BL (7,0) and BR (7,7)
+        # BL is Pattern 1 (7+0=7). BR is Pattern 0 (7+7=14).
+        if is_pattern_0_dark:
+            a1_candidate = 'BR' 
+        else:
+            a1_candidate = 'BL' 
     else:
-        a1_candidate = sorted_c[0][0]  ## need better conditioning for determining a1 as poor lighting may break
- 
+        # White is at the Top
+        # Check the two top corners: TL (0,0) and TR (0,7)
+        # TL is Pattern 0 (0+0=0). TR is Pattern 1 (0+7=7).
+        if is_pattern_0_dark:
+            a1_candidate = 'TL' 
+        else:
+            a1_candidate = 'TR' 
+
     # Orientation lookup: corner name → (a1_row, a1_col, flip_rows, flip_cols)
     orientation_map = {
         'BL': (7, 0, False, False),   # normal white-side view
-        'BR': (7, 7, False, True),    # left-right mirror
+        'BR': (7, 7, False, True),    # rotated 90 deg / left-right mirror
         'TL': (0, 0, True,  False),   # black-side view
         'TR': (0, 7, True,  True),    # rotated 180°
     }
-    a1_row, a1_col, flip_rows, flip_cols = orientation_map[a1_candidate]
-    return a1_row, a1_col, flip_rows, flip_cols, brightness
     
+    a1_row, a1_col, flip_rows, flip_cols = orientation_map[a1_candidate]
+    return a1_row, a1_col, flip_rows, flip_cols, brightness    
+
 def label_chess_squares(
     intersections: list,
     warped_img:    np.ndarray,

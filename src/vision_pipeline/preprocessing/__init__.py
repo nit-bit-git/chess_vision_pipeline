@@ -3,7 +3,7 @@ import numpy as np
 from .detect_corners import find_board_corners
 from .perspective_correction import warp_board, detect_grid_lines_on_warped
 from .labelling import get_square_centers_in_original
-def preprocess_image(image: np.ndarray) -> np.ndarray:
+def preprocess_image(image: np.ndarray) -> tuple:
     """
     Wrapper function: detect corners and return the detected corners.
     """
@@ -23,7 +23,7 @@ def preprocess_image(image: np.ndarray) -> np.ndarray:
     merged_h, merged_v = detect_grid_lines_on_warped(warped, debug=True)  # Step 3
     centers, intersections, labels, sq_map = get_square_centers_in_original(merged_h, merged_v, M, image, warped, debug=True)  # Step 4
          
-    return 
+    return  centers, intersections, labels, sq_map
 
 
     

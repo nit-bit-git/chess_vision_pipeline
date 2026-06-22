@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
-from .transforms import extrapolate_to_n_lines
+from .transforms import robustly_extrapolate_lines
 from .utils.utils import _merge_lines, filter_lines_by_spacing
 
 def warp_board(img, corners, board_size=800, debug=True):
@@ -16,7 +16,23 @@ def warp_board(img, corners, board_size=800, debug=True):
         [0, board_size - 1]
     ], dtype=np.float32)
 
-    M = cv2.getPerspectiveTransform(corners, dst)
+    # Validate / normalize `corners` to shape (4,2) dtype float32
+    arr = np.asarray(corners)
+    # Common shapes: (4,2), (4,1,2), (8,)
+    if arr.dtype != np.float32:
+        try:
+            arr = arr.astype(np.float32)
+        except Exception:
+            arr = np.asarray(arr, dtype=np.float32)
+
+    if arr.ndim == 3 and arr.shape[1] == 1 and arr.shape[2] == 2:
+        arr = arr.reshape(4, 2)
+    elif arr.ndim == 1 and arr.size == 8:
+        arr = arr.reshape(4, 2)
+    elif not (arr.ndim == 2 and arr.shape == (4, 2)):
+        raise ValueError(f"`corners` must be convertible to shape (4,2); got shape {arr.shape}")
+
+    M = cv2.getPerspectiveTransform(arr, dst)
     warped = cv2.warpPerspective(img, M, (board_size, board_size))
 
     if debug:
@@ -101,8 +117,8 @@ def detect_grid_lines_on_warped(warped, board_size=800, debug=True):
     merged_v = projection_fallback(gray, axis=0, existing=merged_v)
 
     # ── Enforce exactly 9 lines via extrapolation ──────────────────────
-    merged_h = extrapolate_to_n_lines(merged_h, n=9)
-    merged_v = extrapolate_to_n_lines(merged_v, n=9)
+    merged_h = robustly_extrapolate_lines(merged_h, n=9)
+    merged_v = robustly_extrapolate_lines(merged_v, n=9)
 
     print(f"  Final: {len(merged_h)}H, {len(merged_v)}V")
 
