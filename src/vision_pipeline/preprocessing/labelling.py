@@ -11,6 +11,7 @@ def get_square_centers_in_original(
     M_warp,
     img_orig,
     warped_img,
+    pieces_found: bool,
     debug=True,
 ):
     """
@@ -54,13 +55,18 @@ def get_square_centers_in_original(
     for i, row in enumerate(intersections):
         intersections[i] = sorted(row, key=lambda p: p[0])
  
+    print(f"intersections[0][0] = {intersections[0][0]} (should be top-left)")
+    print(f"intersections[0][8] = {intersections[0][8]} (should be top-right)")
+    print(f"intersections[8][0] = {intersections[8][0]} (should be bottom-left)")
+    print(f"intersections[8][8] = {intersections[8][8]} (should be bottom-right)")
+    
     assert len(intersections) == 9
     assert all(len(row) == 9 for row in intersections)
  
     # ── 2. Get orientation-aware chess labels ─────────────────────────────────
     # label_chess_squares returns [(grid_row, grid_col, chess_name), ...]
     # ordered row-major (r=0..7, c=0..7)
-    label_tuples = label_chess_squares(intersections, warped_img)
+    label_tuples = label_chess_squares(intersections, pieces_found, warped_img)
  
     # ── 3. Compute 64 square centers (warped coords) and store labels ─────────
     square_centers_warped = []
@@ -99,7 +105,7 @@ def get_square_centers_in_original(
             dot_color = (0, 200, 220) if is_dark else (50, 230, 100)
  
             cv2.circle(overlay, (cx, cy), 5, dot_color, -1)
-            _draw_label(overlay, label, cx, cy, font_scale=0.35, thickness=1)
+            _draw_label(overlay, label, cx, cy, font_scale=0.8, thickness=1)
  
         # Highlight a1 with a larger red ring so orientation is easy to verify
         if 'a1' in chess_labels:

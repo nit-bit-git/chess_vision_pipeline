@@ -5,6 +5,7 @@ from ultralytics import YOLO
 from piece_detection.chess_piece_mapping import generate_full_fen, map_pieces_to_squares, visualize_board
 from piece_detection.yolo_to_detections import extract_piece_detections_verbose, print_detections_summary
 import torch
+from vision_pipeline.inference import generate_move
 
 from .preprocessing import preprocess_image
 
@@ -18,7 +19,7 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Using device: {device}")
     
-    image_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'images', 'cb3.jpg'))
+    image_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'images', 'Media.jpg'))
     if not os.path.exists(image_path):
         print(f"Error: Sample image not found at {image_path}")
         return
@@ -28,7 +29,6 @@ def main():
         print(f"Error: Failed to load image from {image_path}")
         return
     print(f"Image loaded successfully with shape: {image.shape}")
-    centers, intersections, labels, sq_map = preprocess_image(image)
 
     # YOLOv8  model  
     model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'models', 'chess-model-yolov8m.pt'))
@@ -40,6 +40,12 @@ def main():
 
     # make prediction
     results = model(image_path) # path to test image
+
+    pieces_found = True if len(results[0].boxes) > 0 else False
+
+    centers, intersections, labels, sq_map = preprocess_image(image, pieces_found=pieces_found)  # Step 1: Preprocess and detect corners/grid
+
+    
    # Extract with detailed logging
     piece_detections = extract_piece_detections_verbose(results[0], debug=True)
     
@@ -60,5 +66,9 @@ def main():
     fen = generate_full_fen(piece_placement, debug=True)
     print(f"Generated FEN: {fen}")
 
+    stockfish_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..',"models", 'stockfish', 'stockfish.exe'))
+    generated_move = generate_move("r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3", stockfish_path)
+
+    print(f"Generated Move: {generated_move}")
 if __name__ == "__main__":
     main()

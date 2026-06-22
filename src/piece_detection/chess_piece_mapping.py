@@ -262,34 +262,3 @@ def visualize_board(piece_placement: Dict[str, str]) -> str:
     
     return board_str
 
-
-# ============================================================================
-#  EXAMPLE USAGE
-# ============================================================================
-
-def example_usage():
-    """Example: Map pieces from detection results and generate FEN."""
-    
-    # Example piece detections (from your model)
-    piece_detections = [
-        {'class': 11, 'confidence': 0.95, 'center': (258, 148)},   # white rook at h1
-        {'class': 8, 'confidence': 0.92, 'center': (344, 149)},    # white knight at g1
-        {'class': 6, 'confidence': 0.91, 'center': (429, 149)},    # white bishop at f1
-        {'class': 10, 'confidence': 0.94, 'center': (513, 150)},   # white queen at e1
-        {'class': 7, 'confidence': 0.96, 'center': (597, 151)},    # white king at d1
-        {'class': 9, 'confidence': 0.88, 'center': (248, 205)},    # white pawn at h2
-        {'class': 9, 'confidence': 0.89, 'center': (337, 205)},    # white pawn at g2
-        # ... more pieces
-    ]
-    
-    # Your square centers mapping
-    square_centers = {
-        'h1': (258.36, 147.74), 'g1': (344.05, 148.60),
-        'f1': (429.05, 149.46), 'e1': (513.36, 150.45),
-        'd1': (597.02, 151.43), 'c1': (680.00, 152.27),
-        'b1': (762.32, 153.10), 'a1': (844.00, 153.93),
-        'h2': (248.84, 204.51), 'g2': (337.83, 205.17),
-        # ... rest of squares
-    }
-    
-      

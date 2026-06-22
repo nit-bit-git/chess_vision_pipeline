@@ -254,6 +254,7 @@ def get_intersection(line1, line2):
     
 def detect_board_orientation(
     intersections: list,
+    pieces_found: bool,
     warped_img: np.ndarray,
 ):
     """
@@ -282,58 +283,111 @@ def detect_board_orientation(
             vals = gray[mask > 0]
             brightness[r, c] = float(np.median(vals)) if len(vals) else 128.0
 
-    # =========================================================================
-    # STEP 1: Determine the Dark Pattern (Ignores pieces by using 32 squares)
-    # =========================================================================
-    # Pattern 0: TL, BR, etc. (r+c is even)
-    # Pattern 1: TR, BL, etc. (r+c is odd)
-    pattern_0_vals = [brightness[r, c] for r in range(8) for c in range(8) if (r + c) % 2 == 0]
-    pattern_1_vals = [brightness[r, c] for r in range(8) for c in range(8) if (r + c) % 2 != 0]
-    
-    # Whichever pattern has the lower median is physically the dark squares
-    is_pattern_0_dark = np.median(pattern_0_vals) < np.median(pattern_1_vals)
-
-    # =========================================================================
-    # STEP 2: Determine White's Location (Top vs Bottom)
-    # =========================================================================
-    # White pieces are brighter than Black pieces. Compare mean brightness of ranks.
-    top_brightness = np.mean(brightness[0:2, :])
-    bottom_brightness = np.mean(brightness[6:8, :])
-    
-    white_is_bottom = bottom_brightness > top_brightness
-
-    # =========================================================================
-    # STEP 3: Assign A1 (The Dark corner on White's side)
-    # =========================================================================
-    if white_is_bottom:
-        # Check the two bottom corners: BL (7,0) and BR (7,7)
-        # BL is Pattern 1 (7+0=7). BR is Pattern 0 (7+7=14).
+    if not pieces_found:
+        """
+        Empty board: corner brightness is unreliable (glare, lighting artifacts).
+        Instead, use the checkerboard pattern + standard assumption:
+        White is ALWAYS at the bottom in standard chess view.
+        a1 is ALWAYS a dark square.
+        """
+        
+        # Analyze the full 8×8 pattern (not just corners)
+        pattern_0_bright = []  # Squares where (r+c) is even
+        pattern_1_bright = []  # Squares where (r+c) is odd
+        
+        ek = np.ones((5, 5), np.uint8)
+        for r in range(8):
+            for c in range(8):
+                poly = np.array([
+                    intersections[r][c], intersections[r][c+1],
+                    intersections[r+1][c+1], intersections[r+1][c]
+                ], dtype=np.int32)
+                mask = np.zeros((H, W), dtype=np.uint8)
+                cv2.fillPoly(mask, [poly], 255)
+                mask = cv2.erode(mask, ek, iterations=1)
+                vals = gray[mask > 0]
+                square_brightness = float(np.median(vals)) if len(vals) else 128.0
+                
+                if (r + c) % 2 == 0:
+                    pattern_0_bright.append(square_brightness)
+                else:
+                    pattern_1_bright.append(square_brightness)
+        
+        # Which pattern is dark?
+        pattern_0_median = np.median(pattern_0_bright)
+        pattern_1_median = np.median(pattern_1_bright)
+        is_pattern_0_dark = pattern_0_median < pattern_1_median
+        
+        # Standard assumption: White at bottom
+        # a1 must be on white's side AND be dark
+        # Bottom-right (BR): row=7, col=7 → (7+7)=14 (even) → Pattern 0
+        # Bottom-left (BL):  row=7, col=0 → (7+0)=7  (odd)  → Pattern 1
+        
         if is_pattern_0_dark:
-            a1_candidate = 'BR' 
+            a1_candidate = 'BR'  # Pattern 0 is dark, BR is Pattern 0
         else:
-            a1_candidate = 'BL' 
+            a1_candidate = 'BL'  # Pattern 1 is dark, BL is Pattern 1
+        
+        
+        print(f"[Empty Board] Pattern 0 brightness: {pattern_0_median:.1f}")
+        print(f"[Empty Board] Pattern 1 brightness: {pattern_1_median:.1f}")
+        print(f"[Empty Board] Dark pattern: {0 if is_pattern_0_dark else 1}")
+        print(f"[Empty Board] a1 at: {a1_candidate}")
     else:
-        # White is at the Top
-        # Check the two top corners: TL (0,0) and TR (0,7)
-        # TL is Pattern 0 (0+0=0). TR is Pattern 1 (0+7=7).
-        if is_pattern_0_dark:
-            a1_candidate = 'TL' 
+        print("Pieces found, using piece positions to determine orientation.")
+        # =========================================================================
+        # STEP 1: Determine the Dark Pattern (Ignores pieces by using 32 squares)
+        # =========================================================================
+        # Pattern 0: TL, BR, etc. (r+c is even)
+        # Pattern 1: TR, BL, etc. (r+c is odd)
+        pattern_0_vals = [brightness[r, c] for r in range(8) for c in range(8) if (r + c) % 2 == 0]
+        pattern_1_vals = [brightness[r, c] for r in range(8) for c in range(8) if (r + c) % 2 != 0]
+        
+        # Whichever pattern has the lower median is physically the dark squares
+        is_pattern_0_dark = np.median(pattern_0_vals) < np.median(pattern_1_vals)
+
+        # =========================================================================
+        # STEP 2: Determine White's Location (Top vs Bottom)
+        # =========================================================================
+        # White pieces are brighter than Black pieces. Compare mean brightness of ranks.
+        top_brightness = np.mean(brightness[0:2, :])
+        bottom_brightness = np.mean(brightness[6:8, :])
+        
+        white_is_bottom = bottom_brightness > top_brightness
+
+        # =========================================================================
+        # STEP 3: Assign A1 (The Dark corner on White's side)
+        # =========================================================================
+        if white_is_bottom:
+            # Check the two bottom corners: BL (7,0) and BR (7,7)
+            # BL is Pattern 1 (7+0=7). BR is Pattern 0 (7+7=14).
+            if is_pattern_0_dark:
+                a1_candidate = 'BR' 
+            else:
+                a1_candidate = 'BL' 
         else:
-            a1_candidate = 'TR' 
+            # White is at the Top
+            # Check the two top corners: TL (0,0) and TR (0,7)
+            # TL is Pattern 0 (0+0=0). TR is Pattern 1 (0+7=7).
+            if is_pattern_0_dark:
+                a1_candidate = 'TL' 
+            else:
+                a1_candidate = 'TR' 
 
     # Orientation lookup: corner name → (a1_row, a1_col, flip_rows, flip_cols)
     orientation_map = {
-        'BL': (7, 0, False, False),   # normal white-side view
-        'BR': (7, 7, False, True),    # rotated 90 deg / left-right mirror
-        'TL': (0, 0, True,  False),   # black-side view
-        'TR': (0, 7, True,  True),    # rotated 180°
+        'BL': (7, 0, False, False),   # a1 at bottom-left: rank decreases upward
+        'BR': (7, 7, False, True),    # a1 at bottom-right: rank decreases upward, file decreases rightward
+        'TL': (0, 0, True,  False),   # a1 at top-left: rank increases downward
+        'TR': (0, 7, True,  True),    # a1 at top-right: rank increases downward, file decreases rightward
     }
-    
+    print(f"Detected a1 corner: {a1_candidate}, {orientation_map[a1_candidate]}")
     a1_row, a1_col, flip_rows, flip_cols = orientation_map[a1_candidate]
     return a1_row, a1_col, flip_rows, flip_cols, brightness    
 
 def label_chess_squares(
     intersections: list,
+    pieces_found: bool,
     warped_img:    np.ndarray,
 ):
     """
@@ -352,8 +406,7 @@ def label_chess_squares(
              warped image (row 0 = top of image, col 0 = left).
              chess_name is a string like 'a1' … 'h8'.
     """
-    a1_row, a1_col, flip_rows, flip_cols, brightness = \
-        detect_board_orientation(intersections, warped_img)
+    a1_row, a1_col, flip_rows, flip_cols, brightness = detect_board_orientation(intersections,pieces_found, warped_img)
  
     labels = []
     for r in range(8):
