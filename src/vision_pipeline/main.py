@@ -5,8 +5,10 @@ from ultralytics import YOLO
 from piece_detection.chess_piece_mapping import generate_full_fen, map_pieces_to_squares, visualize_board
 from piece_detection.yolo_to_detections import extract_piece_detections_verbose, print_detections_summary
 import torch
+import numpy as np
 from vision_pipeline.inference import generate_move
-
+from pipeline_state import PipelineState
+state = PipelineState()
 from .preprocessing import preprocess_image
 
 
@@ -19,7 +21,7 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Using device: {device}")
     
-    image_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'images', 'Media.jpg'))
+    image_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'images', 'cb3.jpg'))
     if not os.path.exists(image_path):
         print(f"Error: Sample image not found at {image_path}")
         return
@@ -43,11 +45,12 @@ def main():
 
     pieces_found = True if len(results[0].boxes) > 0 else False
 
-    centers, intersections, labels, sq_map = preprocess_image(image, pieces_found=pieces_found)  # Step 1: Preprocess and detect corners/grid
-
+    centers, intersections, labels, sq_map, img, M = preprocess_image(image, pieces_found=pieces_found, state=state)  # Step 1: Preprocess and detect corners/gridd
+   
+    print(f"[Debug 2] M from warp_board: type={type(M)}, shape={M.shape if isinstance(M, np.ndarray) else 'N/A'}")
     
    # Extract with detailed logging
-    piece_detections = extract_piece_detections_verbose(results[0], debug=True)
+    piece_detections = extract_piece_detections_verbose(results[0], state=state, debug=True)
     
     # Print summary
     print_detections_summary(piece_detections)
@@ -67,8 +70,10 @@ def main():
     print(f"Generated FEN: {fen}")
 
     stockfish_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..',"models", 'stockfish', 'stockfish.exe'))
-    generated_move = generate_move("r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3", stockfish_path)
+    generate_move(fen, stockfish_path, sq_map, img, intersections)  # Assuming you want to visualize without an image)
 
-    print(f"Generated Move: {generated_move}")
+    
+
+
 if __name__ == "__main__":
     main()

@@ -7,6 +7,9 @@ Ultralytics Results → list of dicts with class, confidence, center
 import numpy as np
 from typing import List, Dict, Tuple
 
+from pipeline_state import PipelineState
+from vision_pipeline.preprocessing.utils.utils import get_adaptive_piece_anchor
+
 
 def extract_piece_detections(yolo_results) -> List[Dict]:
     """
@@ -85,13 +88,14 @@ def extract_piece_detections(yolo_results) -> List[Dict]:
     return piece_detections
 
 
-def extract_piece_detections_verbose(yolo_results, debug: bool = True) -> List[Dict]:
+def extract_piece_detections_verbose(yolo_results, state: PipelineState = None, debug: bool = True) -> List[Dict]:
     """
     Extract piece detections with detailed logging.
     
     Parameters
     ----------
     yolo_results : ultralytics.engine.results.Results
+    state : PipelineState, optional
     debug : bool, print detailed information
     
     Returns
@@ -109,8 +113,7 @@ def extract_piece_detections_verbose(yolo_results, debug: bool = True) -> List[D
         bbox = boxes.xyxy[i].cpu().numpy().astype(float)
         x1, y1, x2, y2 = bbox
         
-        center_x = (x1 + x2) / 2
-        center_y = (y1 + y2) / 2
+        center_x, center_y = get_adaptive_piece_anchor((x1, y1, x2, y2), state.tilt_ratio if state else 1.0)
         
         class_id = int(boxes.cls[i].item())
         confidence = float(boxes.conf[i].item())

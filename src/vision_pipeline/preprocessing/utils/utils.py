@@ -435,3 +435,51 @@ def label_chess_squares(
             labels.append((r, c, chess_name))
  
     return labels
+
+def calculate_tilt_ratio(board_corners: np.ndarray) -> float:
+    """
+    Calculates the camera tilt proxy based on perspective foreshortening.
+    Expects board_corners in order: [Top-Left, Top-Right, Bottom-Right, Bottom-Left]
+    """
+    tl, tr, br, bl = board_corners
+    
+    # Calculate pixel width of the top edge and bottom edge
+    top_width = np.linalg.norm(tr - tl)
+    bottom_width = np.linalg.norm(br - bl)
+    
+    # Calculate ratio (Top / Bottom)
+    if bottom_width == 0:
+        return 1.0 # Safety fallback
+        
+    ratio = top_width / bottom_width
+    
+    # Clamp between 0.0 and 1.0 to handle slight lens distortions
+    return max(0.0, min(1.0, float(ratio)))
+
+def get_adaptive_piece_anchor(
+    bbox: Tuple[int, int, int, int], 
+    tilt_ratio: float
+) -> Tuple[float, float]:
+    """
+    Dynamically calculates the best X,Y point to map a piece to the board.
+    
+    Parameters
+    ----------
+    bbox : (x_min, y_min, x_max, y_max) of the detected piece
+    tilt_ratio : The output of calculate_tilt_ratio()
+    """
+    x_min, y_min, x_max, y_max = bbox
+    
+    # X is always the center of the bounding box
+    anchor_x = (x_min + x_max) / 2.0
+    
+    # Y dynamically slides based on the camera tilt
+    y_center = (y_min + y_max) / 2.0
+    half_height = (y_max - y_min) / 2.0
+    
+    # The Magic Formula: 
+    # If ratio=1.0 (Top-Down), multiplier is 0.0 -> anchor_y = y_center
+    # If ratio=0.4 (Angled), multiplier is 0.6 -> anchor_y moves 60% down towards the base
+    anchor_y = y_center + ((1.0 - tilt_ratio) * half_height)
+    print(f"Adaptive anchor for bbox {bbox} with tilt_ratio {tilt_ratio:.2f}: ({anchor_x:.1f}, {anchor_y:.1f})")
+    return (anchor_x, anchor_y)

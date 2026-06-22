@@ -120,5 +120,5 @@ def get_square_centers_in_original(
         plt.axis("off")
         plt.tight_layout()
         plt.show()
- 
-    return centers_orig, intersections, chess_labels, square_center_map
+    overlay = cv2.cvtColor(overlay, cv2.COLOR_BGR2RGB).copy()
+    return centers_orig, intersections, chess_labels, square_center_map, overlay if debug else img_orig

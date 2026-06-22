@@ -185,7 +185,7 @@ def board_array_to_fen(board: np.ndarray) -> str:
 def generate_full_fen(
     piece_placement: Dict[str, str],
     active_color: str = 'w',
-    castling: str = 'KQkq',
+    castling: str = '-',
     en_passant: str = '-',
     halfmove: int = 0,
     fullmove: int = 1,
